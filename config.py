@@ -1,10 +1,5 @@
-import os
 import streamlit as st
-from dotenv import load_dotenv
-from utils.crypto import decrypt_value
 
-# Load environment variables from .env file
-load_dotenv()
 
 # Database configuration with decryption
 DB_HOST = st.secrets["db_host"]
