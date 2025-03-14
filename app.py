@@ -4,6 +4,21 @@ import psycopg2
 import pandas as pd
 import plotly.express as px
 
+# Set page config to wide layout to reduce padding
+st.set_page_config(layout="wide")
+
+# Custom CSS to further reduce padding
+st.markdown("""
+<style>
+    .block-container {
+        padding-top: 1rem;
+        padding-bottom: 1rem;
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 st.title("Settlement App")
 
 # You can now use DATABASE_URL for your database connections
