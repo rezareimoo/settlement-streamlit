@@ -54,18 +54,21 @@ try:
         st.plotly_chart(fig)
 
         # Create a line chart based on the CreationDate, grouped by Region
-        df['lastlogdate'] = pd.to_datetime(df['lastlogdate'])
+        df['creationdate'] = pd.to_datetime(df['creationdate'])
         
         # Filter cases created after 2020
-        df = df[df['lastlogdate'].dt.year > 2022]
+        df = df[df['creationdate'].dt.year > 2022]
 
-        # Group by CreationDate and Region, then count the number of cases
-        df_grouped = df.groupby(['lastlogdate', 'region']).size().reset_index(name='case_count')
+        # Create a month column for monthly aggregation
+        df['month_year'] = df['creationdate'].dt.to_period('M')
+        
+        # Group by Month and Region, then count the number of cases
+        df_grouped = df.groupby([df['month_year'].astype(str), 'region']).size().reset_index(name='case_count')
 
         # Create the line chart
-        line_fig = px.line(df_grouped, x='lastlogdate', y='case_count', color='region', 
-                           title='Cases Over Time by Region', 
-                           labels={'lastlogdate': 'Last Log Date', 'case_count': 'Number of Cases'})
+        line_fig = px.line(df_grouped, x='month_year', y='case_count', color='region', 
+                           title='Cases Over Time by Region (Monthly)', 
+                           labels={'month_year': 'Month', 'case_count': 'Number of Cases'})
         st.plotly_chart(line_fig)
 
         # Display the filtered data in a scrollable table
@@ -78,30 +81,40 @@ try:
         st.dataframe(social_inclusion_agency_df)
 
     with jamati_demographics:
+        # Create two columns for side-by-side charts
+        col1, col2 = st.columns(2)
 
-        origin_counts = jamati_member_df['countryoforigin'].dropna()
-        origin_counts = origin_counts[origin_counts != ""].value_counts()
+        with col1:
+            origin_counts = jamati_member_df['countryoforigin'].dropna()
+            origin_counts = origin_counts[origin_counts != ""].value_counts()
 
-        fig = px.pie(origin_counts, values=origin_counts.values, names=origin_counts.index, title='Country of Origin Distribution')
-        st.plotly_chart(fig)
+            fig = px.pie(origin_counts, values=origin_counts.values, names=origin_counts.index, title='Country of Origin Distribution')
+            st.plotly_chart(fig, use_container_width=True)
         
-        # Calculate age from yearofbirth
-        if 'yearofbirth' in jamati_member_df.columns:
-            # Filter out rows with NaN or empty yearofbirth
-            valid_years_df = jamati_member_df.dropna(subset=['yearofbirth'])
-            valid_years_df = valid_years_df[valid_years_df['yearofbirth'] != ""]
+        with col2:
+            # Calculate age from yearofbirth
+            if 'yearofbirth' in jamati_member_df.columns:
+                # Filter out rows with NaN or empty yearofbirth
+                valid_years_df = jamati_member_df.dropna(subset=['yearofbirth'])
+                valid_years_df = valid_years_df[valid_years_df['yearofbirth'] != ""]
+                
+                # Filter out yearofbirth values greater than 2024 or equal to 0
+                valid_years_df = valid_years_df[(valid_years_df['yearofbirth'] <= 2024) & (valid_years_df['yearofbirth'] > 1800)]
 
-            current_year = pd.Timestamp.now().year
-            valid_years_df['age'] = current_year - valid_years_df['yearofbirth']
-            
-            # Create a histogram of ages
-            age_histogram = px.histogram(valid_years_df, x='age', nbins=20, title='Age Distribution')
-            st.plotly_chart(age_histogram)
-            st.dataframe(valid_years_df)
-        else:
-            st.write("Year of birth data is not available in the dataset.")
+                current_year = pd.Timestamp.now().year
+                valid_years_df['age'] = current_year - valid_years_df['yearofbirth']
+                
+                # Create a histogram of ages with visual distinction
+                age_histogram = px.histogram(valid_years_df, x='age', nbins=20, title='Age Distribution', opacity=0.8)
+                # Update layout to add spacing between bars
+                age_histogram.update_traces(marker_line_width=1, marker_line_color="white")
+                st.plotly_chart(age_histogram, use_container_width=True)
+            else:
+                st.write("Year of birth data is not available in the dataset.")
+        
+        # Display the dataframe below the charts
+        st.subheader("Jamati Member Data")
+        st.dataframe(valid_years_df)
 
 except psycopg2.Error as e:
     print(f"Error connecting to the database: {e}")
-
-
