@@ -63,7 +63,17 @@ try:
         if selected_region != "All":
             df = df[df['region'] == selected_region]
 
-        # Create a pie chart of the statuses
+        # Calculate total number of cases and open cases
+        total_cases = len(df)
+        open_cases = df[df['status'].isin(['Open', 'Reopen'])].shape[0]
+
+        # Display headers side by side with custom color for open cases
+        col1, col2 = st.columns(2)
+        with col1:
+            st.header(f"Total Cases: {total_cases}")
+        with col2:
+            st.markdown(f"<h2 style='color: #FF6347;'>Open Cases: {open_cases}</h2>", unsafe_allow_html=True)
+
         status_counts = df['status'].value_counts()
         fig = px.pie(status_counts, values=status_counts.values, names=status_counts.index, title='Case Status Distribution')
         st.plotly_chart(fig)
@@ -82,18 +92,18 @@ try:
 
         # Create the line chart
         line_fig = px.line(df_grouped, x='month_year', y='case_count', color='region', 
-                           title='Cases Over Time by Region (Monthly)', 
+                           title='New Cases Over Time by Region (Monthly)', 
                            labels={'month_year': 'Month', 'case_count': 'Number of Cases'})
         st.plotly_chart(line_fig)
 
         # Display the filtered data in a scrollable table
         st.subheader("Filtered Data")
         st.dataframe(df)
-        st.dataframe(jamati_member_df)
-        st.dataframe(education_df)
-        st.dataframe(finance_df)
-        st.dataframe(physical_mental_health_df)
-        st.dataframe(social_inclusion_agency_df)
+        # st.dataframe(jamati_member_df.drop("legalstatus", axis=1))
+        # st.dataframe(education_df)
+        # st.dataframe(finance_df)
+        # st.dataframe(physical_mental_health_df)
+        # st.dataframe(social_inclusion_agency_df)
 
     with jamati_demographics:
         # Create two columns for side-by-side charts
@@ -129,7 +139,7 @@ try:
         
         # Display the dataframe below the charts
         st.subheader("Jamati Member Data")
-        st.dataframe(valid_years_df)
+        st.dataframe(jamati_member_df.drop("legalstatus", axis=1))
 
 except psycopg2.Error as e:
     print(f"Error connecting to the database: {e}")
