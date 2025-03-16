@@ -217,6 +217,38 @@ try:
                 st.plotly_chart(age_histogram, use_container_width=True)
             else:
                 st.write("Year of birth data is not available in the dataset.")
+
+        # Add education level visualization
+        if 'educationlevel' in jamati_member_df.columns:
+            # Filter out null values and empty strings, then get value counts
+            education_counts = jamati_member_df['educationlevel'].dropna()
+            education_counts = education_counts[education_counts != ""].value_counts()
+            
+            if not education_counts.empty:  # Only create visualization if we have data
+                # Create a bar chart for education levels
+                education_fig = px.bar(
+                    x=education_counts.index,
+                    y=education_counts.values,
+                    title='Education Level Distribution',
+                    labels={'x': 'Education Level', 'y': 'Number of Members'},
+                    color=education_counts.values,
+                    color_continuous_scale='Viridis'
+                )
+                
+                # Update layout for better visualization
+                education_fig.update_layout(
+                    showlegend=False,
+                    xaxis_tickangle=45,
+                    margin=dict(b=100),  # Add bottom margin for rotated labels
+                    coloraxis_showscale=False  # Hide the color scale
+                )
+                
+                # Display the chart
+                st.plotly_chart(education_fig, use_container_width=True)
+            else:
+                st.write("No valid education level data available.")
+        else:
+            st.write("Education level data is not available in the dataset.")
         
         # Display the dataframe below the charts
         st.subheader("Jamati Member Data")
