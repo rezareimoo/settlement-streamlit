@@ -3,6 +3,8 @@ from config import DATABASE_URL
 import psycopg2
 import pandas as pd
 import plotly.express as px
+from urllib.request import urlopen
+import json
 
 # Set page config to wide layout to reduce padding
 st.set_page_config(layout="wide")
@@ -69,14 +71,93 @@ try:
 
         # Display headers side by side with custom color for open cases
         col1, col2 = st.columns(2)
-        with col1:
-            st.header(f"Total Cases: {total_cases}")
-        with col2:
-            st.markdown(f"<h2 style='color: #FF6347;'>Open Cases: {open_cases}</h2>", unsafe_allow_html=True)
 
-        status_counts = df['status'].value_counts()
-        fig = px.pie(status_counts, values=status_counts.values, names=status_counts.index, title='Case Status Distribution')
-        st.plotly_chart(fig)
+        # Custom CSS for button styling
+        st.markdown("""
+            <style>
+            div[data-testid="stHorizontalBlock"] div[data-testid="column"] button[data-testid="baseButton-secondary"]:hover {
+                background-color: #1f77b4;
+                color: white;
+            }
+            </style>
+        """, unsafe_allow_html=True)
+
+        # Initialize session states
+        if 'active_view' not in st.session_state:
+            st.session_state.active_view = 'total'
+        if 'needs_rerun' not in st.session_state:
+            st.session_state.needs_rerun = False
+
+        # Check if we need to rerun
+        if st.session_state.needs_rerun:
+            st.session_state.needs_rerun = False
+            st.rerun()
+
+        with col1:
+            if st.button(
+                f"Total Cases: {total_cases}",
+                type="primary" if st.session_state.active_view == 'total' else "secondary",
+                use_container_width=True
+            ):
+                st.session_state.active_view = 'total'
+                st.session_state.needs_rerun = True
+                st.rerun()
+
+        with col2:
+            if st.button(
+                f"Open Cases: {open_cases}",
+                type="primary" if st.session_state.active_view == 'open' else "secondary",
+                use_container_width=True
+            ):
+                st.session_state.active_view = 'open'
+                st.session_state.needs_rerun = True
+                st.rerun()
+
+        # Filter based on active view
+        if st.session_state.active_view == 'open':
+            df = df[df['status'].isin(['Open', 'Reopen'])]
+
+        # Create two columns for pie chart and map
+        pie_col, map_col = st.columns(2)
+
+        with pie_col:
+            # Display pie chart
+            status_counts = df['status'].value_counts()
+            fig = px.pie(status_counts, values=status_counts.values, names=status_counts.index, title='Case Status Distribution')
+            st.plotly_chart(fig, use_container_width=True)
+
+        with map_col:
+            # Create US map visualization
+            state_counts = df['state'].value_counts().reset_index()
+            state_counts.columns = ['state', 'count']
+            
+            # Create the choropleth map
+            fig_map = px.choropleth(
+                state_counts,
+                locations='state',
+                locationmode='USA-states',
+                color='count',
+                scope='usa',
+                color_continuous_scale=['white', 'blue'],
+                title='Number of Cases by State',
+                labels={'count': 'Number of Cases'}
+            )
+            
+            # Update the layout for better visualization and remove background
+            fig_map.update_layout(
+                geo_scope='usa',
+                margin=dict(l=0, r=0, t=30, b=0),
+                geo=dict(
+                    showlakes=False,
+                    showland=False,
+                    bgcolor='rgba(0,0,0,0)'
+                ),
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)'
+            )
+            
+            # Display the map
+            st.plotly_chart(fig_map, use_container_width=True)
 
         # Create a line chart based on the CreationDate, grouped by Region
         df['creationdate'] = pd.to_datetime(df['creationdate'])
