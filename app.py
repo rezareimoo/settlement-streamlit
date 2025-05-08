@@ -409,7 +409,7 @@ try:
                                     
                                     with col2:
                                         st.markdown("### Relationships & Connections")
-                                        st.markdown(f"**Friend/Family Connection:** {'Yes' if social['hasfriendconnection'] else 'No'}")
+                                        st.markdown(f"**Friend/Family Connection:** {'Yes' if social['hasfriendfamilyconnection'] else 'No'}")
                                         
                                         if pd.notna(social['familyfriendconnectioncomments']):
                                             st.markdown(f"**Connection Comments:** {social['familyfriendconnectioncomments']}")
@@ -591,7 +591,7 @@ try:
                                     if pd.notna(health['substanceusecomments']):
                                         st.markdown(f"**Substance Use Comments:** {health['substanceusecomments']}")
                                     
-                                    st.markdown(f"**Has Stress Management Strategies:** {'Yes' if health['hasstreemanagementstrategies'] else 'No'}")
+                                    st.markdown(f"**Has Stress Management Strategies:** {'Yes' if health['hasstressmanagementstrategies'] else 'No'}")
                                     
                                     if pd.notna(health['stressmanagementcomments']):
                                         st.markdown(f"**Stress Management Comments:** {health['stressmanagementcomments']}")
