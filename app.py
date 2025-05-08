@@ -60,6 +60,44 @@ try:
     cases, jamati_demographics, case_lookup = st.tabs(["Cases", "Jamati Demographics", "Case Lookup"])
 
     with cases:
+        # --- Summary Table at the Top ---
+        # 1. Aggregate number of cases per region
+        case_counts = df.groupby('region')['caseid'].nunique().reset_index(name='Number of Cases')
+
+        # 2. For each region, count the number of individuals in jamati_member_df
+        def count_individuals(region):
+            case_ids = df[df['region'] == region]['caseid'].unique()
+            return jamati_member_df[jamati_member_df['caseid'].isin(case_ids)].shape[0]
+
+        case_counts['Number of Individuals'] = case_counts['region'].apply(count_individuals)
+
+        # 3. Calculate number of open cases per region
+        open_cases_df = df[df['status'].isin(['Open', 'Reopen'])]
+        open_case_counts = open_cases_df.groupby('region')['caseid'].nunique().reset_index(name='Open Cases')
+
+        # 4. Merge open case counts into the summary table
+        case_counts = case_counts.merge(open_case_counts, on='region', how='left').fillna(0)
+
+        # 5. Format numbers with commas
+        case_counts['Number of Cases'] = case_counts['Number of Cases'].map('{:,}'.format)
+        case_counts['Number of Individuals'] = case_counts['Number of Individuals'].map('{:,}'.format)
+        case_counts['Open Cases'] = case_counts['Open Cases'].astype(int).map('{:,}'.format)
+
+        # 6. Set region as index for a cleaner look
+        case_counts = case_counts.set_index('region')
+
+        # 7. Display with a nice header and description
+        st.markdown("## 🗺️ Regional Summary")
+        st.markdown(
+            "This table summarizes the number of settlement cases, open cases, and the aggregate number of individuals per region."
+        )
+        st.dataframe(
+            case_counts.style
+                .highlight_max(axis=0, color='lightblue')
+                .set_properties(**{'font-size': '16px'})
+        )
+        st.markdown("---")  # Horizontal line for separation
+
         selected_region = st.selectbox("Select Region", options=["All"] + list(regions))
 
         # Filter the dataframe based on selections
@@ -68,7 +106,7 @@ try:
 
         # Calculate total number of cases and open cases
         total_cases = len(df)
-        open_cases = df[df['status'].isin(['Open', 'Reopen'])].shape[0]
+        open_cases = df[df['status'].isin(['Open', 'Reopen'])]
 
         # Display headers side by side with custom color for open cases
         col1, col2 = st.columns(2)
@@ -106,7 +144,7 @@ try:
 
         with col2:
             if st.button(
-                f"Open Cases: {open_cases}",
+                f"Open Cases: {len(open_cases)}",
                 type="primary" if st.session_state.active_view == 'open' else "secondary",
                 use_container_width=True
             ):
