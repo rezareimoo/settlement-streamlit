@@ -57,59 +57,143 @@ try:
     regions = df['region'].unique()
     country_of_origin = jamati_member_df['countryoforigin'].unique()
 
-    cases, jamati_demographics, children_data, case_lookup = st.tabs(["Cases", "Jamati Demographics", "Children's Data", "Case Lookup"])
+    cases, jamati_demographics, children_data, case_lookup = st.tabs(["Cases (CMS + FDP + Compare)", "Jamati Demographics (CMS Only)", "Children's Data (CMS Only)", "Case Lookup (CMS Only)"])
 
     with cases:
-        # --- Summary Table at the Top ---
-        # 1. Aggregate number of cases per region
-        case_counts = df.groupby('region')['caseid'].nunique().reset_index(name='Number of Cases')
-
-        # 2. For each region, count the number of individuals in jamati_member_df
-        def count_individuals(region):
-            case_ids = df[df['region'] == region]['caseid'].unique()
-            return jamati_member_df[jamati_member_df['caseid'].isin(case_ids)].shape[0]
-
-        case_counts['Number of Individuals'] = case_counts['region'].apply(count_individuals)
-
-        # 3. Calculate number of open cases per region
-        open_cases_df = df[df['status'].isin(['Open', 'Reopen'])]
-        open_case_counts = open_cases_df.groupby('region')['caseid'].nunique().reset_index(name='Open Cases')
-
-        # 4. Merge open case counts into the summary table
-        case_counts = case_counts.merge(open_case_counts, on='region', how='left').fillna(0)
-
-        # 5. Format numbers with commas
-        case_counts['Number of Cases'] = case_counts['Number of Cases'].map('{:,}'.format)
-        case_counts['Number of Individuals'] = case_counts['Number of Individuals'].map('{:,}'.format)
-        case_counts['Open Cases'] = case_counts['Open Cases'].astype(int).map('{:,}'.format)
-
-        # 6. Set region as index for a cleaner look
-        case_counts = case_counts.set_index('region')
-
-        # 7. Display with a nice header and description
-        st.markdown("## 🗺️ Regional Summary")
-        st.markdown(
-            "This table summarizes the number of settlement cases, open cases, and the aggregate number of individuals per region."
+        # Data source selection
+        st.markdown("### 📊 Data Source Selection")
+        data_source = st.radio(
+            "Select data source:",
+            options=["CMS Data", "FDP Data", "Compare Both"],
+            horizontal=True,
+            key="data_source_selector"
         )
-        st.dataframe(
-            case_counts.style
+        st.markdown("---")
+        
+        # Load FDP data if needed
+        fdp_df = None
+        if data_source in ["FDP Data", "Compare Both"]:
+            try:
+                conn_fdp = psycopg2.connect(DATABASE_URL)
+                fdp_query = "SELECT * FROM fdp_cases"
+                fdp_raw = pd.read_sql(fdp_query, conn_fdp)
+                conn_fdp.close()
                 
-                .set_properties(**{'font-size': '16px'})
-        )
-        st.markdown("---")  # Horizontal line for separation
+                # Map FDP fields to CMS structure
+                fdp_df = fdp_raw.copy()
+                fdp_df = fdp_df.rename(columns={
+                    'access_case': 'caseid',
+                    'settlement_case_status': 'status',
+                    'family_last_name': 'lastname',
+                    'head_of_family_first_name': 'firstname',
+                    'state_code_2_digits': 'state',
+                    'access_case_creation_date': 'creationdate',
+                    'settlement_cm': 'assignedto',
+                    'phone': 'phonenumber',
+                    'current_location': 'city',
+                    'zip_code': 'zip'
+                })
+                
+                # Convert creation date to datetime
+                fdp_df['creationdate'] = pd.to_datetime(fdp_df['creationdate'], errors='coerce')
+                
+                # Map status values to CMS equivalents
+                status_mapping = {
+                    'Active': 'Open',
+                    'Closed': 'Closed',
+                    'On Hold': 'Open',
+                    'Completed': 'Closed'
+                }
+                fdp_df['status'] = fdp_df['status'].map(status_mapping).fillna(fdp_df['status'])
+                
+                # Ensure required columns exist
+                required_cols = ['caseid', 'region', 'status', 'creationdate', 'firstname', 'lastname', 'state']
+                for col in required_cols:
+                    if col not in fdp_df.columns:
+                        fdp_df[col] = 'N/A'
+                
+                # Handle missing or null regions
+                fdp_df['region'] = fdp_df['region'].fillna('Unknown')
+                
+                # Filter out any completely invalid rows
+                fdp_df = fdp_df.dropna(subset=['caseid'])
+                        
+            except Exception as e:
+                st.error(f"Error loading FDP data: {e}")
+                data_source = "CMS Data"  # Fallback to CMS
+        
+        # Select which dataset to use for single view mode
+        if data_source == "CMS Data":
+            working_df = df.copy()
+            data_label = "CMS"
+        elif data_source == "FDP Data":
+            working_df = fdp_df.copy()
+            data_label = "FDP"
+        else:  # Compare Both
+            working_df = df.copy()
+            data_label = "CMS"
+        
+        if data_source != "Compare Both":
+            # Single view mode
+            st.markdown(f"## 🗺️ Regional Summary ({data_label} Data)")
+            # --- Summary Table at the Top ---
+            # 1. Aggregate number of cases per region
+            case_counts = working_df.groupby('region')['caseid'].nunique().reset_index(name='Number of Cases')
 
-        selected_region = st.selectbox("Select Region", options=["All"] + list(regions))
+            # 2. For each region, count the number of individuals in jamati_member_df
+            if data_source == "CMS Data":
+                def count_individuals(region):
+                    case_ids = working_df[working_df['region'] == region]['caseid'].unique()
+                    return jamati_member_df[jamati_member_df['caseid'].isin(case_ids)].shape[0]
+                case_counts['Number of Individuals'] = case_counts['region'].apply(count_individuals)
+            else:
+                # For FDP data, use aggregated family size data if available
+                def count_fdp_individuals(region):
+                    region_cases = working_df[working_df['region'] == region]
+                    if 'number_in_family' in region_cases.columns:
+                        return region_cases['number_in_family'].fillna(0).sum()
+                    return 0
+                case_counts['Number of Individuals'] = case_counts['region'].apply(count_fdp_individuals)
 
-        # Filter the dataframe based on selections
-        if selected_region != "All":
-            df = df[df['region'] == selected_region]
+            # 3. Calculate number of open cases per region
+            open_cases_df = working_df[working_df['status'].isin(['Open', 'Reopen'])]
+            open_case_counts = open_cases_df.groupby('region')['caseid'].nunique().reset_index(name='Open Cases')
 
-        # Calculate total number of cases and open cases
-        total_cases = len(df)
-        open_cases = df[df['status'].isin(['Open', 'Reopen'])]
+            # 4. Merge open case counts into the summary table
+            case_counts = case_counts.merge(open_case_counts, on='region', how='left').fillna(0)
 
-        # Display headers side by side with custom color for open cases
-        col1, col2 = st.columns(2)
+            # 5. Format numbers with commas
+            case_counts['Number of Cases'] = case_counts['Number of Cases'].map('{:,}'.format)
+            case_counts['Number of Individuals'] = case_counts['Number of Individuals'].map('{:,}'.format)
+            case_counts['Open Cases'] = case_counts['Open Cases'].astype(int).map('{:,}'.format)
+
+            # 6. Set region as index for a cleaner look
+            case_counts = case_counts.set_index('region')
+
+            # 7. Display with a nice header and description
+            st.markdown(
+                f"This table summarizes the number of settlement cases, open cases, and the aggregate number of individuals per region using {data_label} data."
+            )
+            st.dataframe(
+                case_counts.style
+                    
+                    .set_properties(**{'font-size': '16px'})
+            )
+            st.markdown("---")  # Horizontal line for separation
+
+            regions_list = working_df['region'].unique().tolist()
+            selected_region = st.selectbox("Select Region", options=["All"] + list(regions_list))
+
+            # Filter the dataframe based on selections
+            if selected_region != "All":
+                working_df = working_df[working_df['region'] == selected_region]
+
+            # Calculate total number of cases and open cases
+            total_cases = len(working_df)
+            open_cases = working_df[working_df['status'].isin(['Open', 'Reopen'])]
+
+            # Display headers side by side with custom color for open cases
+            col1, col2 = st.columns(2)
 
         # Custom CSS for button styling
         st.markdown("""
@@ -132,102 +216,328 @@ try:
             st.session_state.needs_rerun = False
             st.rerun()
 
-        with col1:
-            if st.button(
-                f"Total Cases: {total_cases}",
-                type="primary" if st.session_state.active_view == 'total' else "secondary",
-                use_container_width=True
-            ):
-                st.session_state.active_view = 'total'
-                st.session_state.needs_rerun = True
-                st.rerun()
+        if data_source != "Compare Both":
+            # Action buttons in two columns
+            col1, col2 = st.columns(2)
 
-        with col2:
-            if st.button(
-                f"Open Cases: {len(open_cases)}",
-                type="primary" if st.session_state.active_view == 'open' else "secondary",
-                use_container_width=True
-            ):
-                st.session_state.active_view = 'open'
-                st.session_state.needs_rerun = True
-                st.rerun()
+            with col1:
+                if st.button(
+                    f"Total Cases: {total_cases}",
+                    type="primary" if st.session_state.active_view == 'total' else "secondary",
+                    use_container_width=True
+                ):
+                    st.session_state.active_view = 'total'
+                    st.session_state.needs_rerun = True
+                    st.rerun()
 
-        # Filter based on active view
-        if st.session_state.active_view == 'open':
-            df = df[df['status'].isin(['Open', 'Reopen'])]
+            with col2:
+                if st.button(
+                    f"Open Cases: {len(open_cases)}",
+                    type="primary" if st.session_state.active_view == 'open' else "secondary",
+                    use_container_width=True
+                ):
+                    st.session_state.active_view = 'open'
+                    st.session_state.needs_rerun = True
+                    st.rerun()
+
+            # Filter based on active view
+            if st.session_state.active_view == 'open':
+                working_df = working_df[working_df['status'].isin(['Open', 'Reopen'])]
+
+            st.subheader(f"Settlement Cases ({data_label} Data)")
+            st.dataframe(working_df)
+
+            # Create two columns for pie chart and map
+            pie_col, map_col = st.columns(2)
+
+            with pie_col:
+                status_counts = working_df['status'].value_counts()
+                fig = px.pie(status_counts, values=status_counts.values, names=status_counts.index,
+                             title=f'Case Status Distribution ({data_label})')
+                st.plotly_chart(fig, use_container_width=True)
+
+            with map_col:
+                # Create US map visualization
+                state_counts = working_df['state'].value_counts().reset_index()
+                state_counts.columns = ['state', 'count']
+
+                fig_map = px.choropleth(
+                    state_counts,
+                    locations='state',
+                    locationmode='USA-states',
+                    color='count',
+                    scope='usa',
+                    color_continuous_scale=['white', 'blue'],
+                    title=f'Number of Cases by State ({data_label})',
+                    labels={'count': 'Number of Cases'}
+                )
+                fig_map.update_layout(
+                    geo_scope='usa',
+                    margin=dict(l=0, r=0, t=30, b=0),
+                    geo=dict(showlakes=False, showland=False, bgcolor='rgba(0,0,0,0)'),
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)'
+                )
+                st.plotly_chart(fig_map, use_container_width=True)
+
+            # Timeline chart below
+            timeline_df = working_df.copy()
+            timeline_df['creationdate'] = pd.to_datetime(timeline_df['creationdate'], errors='coerce')
+            timeline_df = timeline_df.dropna(subset=['creationdate'])
+
+            if not timeline_df.empty:
+                timeline_df = timeline_df[timeline_df['creationdate'].dt.year > 2022]
+                timeline_df['month_year'] = timeline_df['creationdate'].dt.to_period('M')
+                df_grouped = timeline_df.groupby([timeline_df['month_year'].astype(str), 'region']).size().reset_index(name='case_count')
+                line_fig = px.line(df_grouped, x='month_year', y='case_count', color='region',
+                                   title=f'New Cases Over Time by Region - Monthly ({data_label})',
+                                   labels={'month_year': 'Month', 'case_count': 'Number of Cases'})
+                st.plotly_chart(line_fig)
+            else:
+                st.warning(f"No valid {data_label} data available for timeline visualization")
+
+            # Display the filtered data in a scrollable table
+           
+            # st.dataframe(jamati_member_df.drop("legalstatus", axis=1))
+            # st.dataframe(education_df)
+            # st.dataframe(finance_df)
+            # st.dataframe(physical_mental_health_df)
+            # st.dataframe(social_inclusion_agency_df)
         
-        st.subheader("Settlement Cases")
-        st.dataframe(df)
-
-        # Create two columns for pie chart and map
-        pie_col, map_col = st.columns(2)
-
-        with pie_col:
-            # Display pie chart
-            status_counts = df['status'].value_counts()
-            fig = px.pie(status_counts, values=status_counts.values, names=status_counts.index, title='Case Status Distribution')
-            st.plotly_chart(fig, use_container_width=True)
-
-        with map_col:
-            # Create US map visualization
-            state_counts = df['state'].value_counts().reset_index()
-            state_counts.columns = ['state', 'count']
+        if data_source == "Compare Both":
+            # Comparison mode - side by side view
+            st.markdown("## 🔄 Data Source Comparison")
+            st.markdown("Side-by-side comparison of CMS and FDP data sources")
             
-            # Create the choropleth map
-            fig_map = px.choropleth(
-                state_counts,
-                locations='state',
-                locationmode='USA-states',
-                color='count',
-                scope='usa',
-                color_continuous_scale=['white', 'blue'],
-                title='Number of Cases by State',
-                labels={'count': 'Number of Cases'}
-            )
+            # Data quality metrics at the top
+            st.markdown("### 📈 Data Quality Overview")
             
-            # Update the layout for better visualization and remove background
-            fig_map.update_layout(
-                geo_scope='usa',
-                margin=dict(l=0, r=0, t=30, b=0),
-                geo=dict(
-                    showlakes=False,
-                    showland=False,
-                    bgcolor='rgba(0,0,0,0)'
-                ),
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)'
-            )
+            metric_col1, metric_col2, metric_col3 = st.columns(3)
             
-            # Display the map
-            st.plotly_chart(fig_map, use_container_width=True)
-
-        # Create a line chart based on the CreationDate, grouped by Region
-        df['creationdate'] = pd.to_datetime(df['creationdate'])
-        
-        # Filter cases created after 2020
-        df = df[df['creationdate'].dt.year > 2022]
-
-        # Create a month column for monthly aggregation
-        df['month_year'] = df['creationdate'].dt.to_period('M')
-        
-        # Group by Month and Region, then count the number of cases
-        df_grouped = df.groupby([df['month_year'].astype(str), 'region']).size().reset_index(name='case_count')
-
-        # Create the line chart
-        line_fig = px.line(df_grouped, x='month_year', y='case_count', color='region', 
-                           title='New Cases Over Time by Region (Monthly)', 
-                           labels={'month_year': 'Month', 'case_count': 'Number of Cases'})
-        st.plotly_chart(line_fig)
-
-        # Display the filtered data in a scrollable table
-       
-        # st.dataframe(jamati_member_df.drop("legalstatus", axis=1))
-        # st.dataframe(education_df)
-        # st.dataframe(finance_df)
-        # st.dataframe(physical_mental_health_df)
-        # st.dataframe(social_inclusion_agency_df)
+            with metric_col1:
+                cms_total = len(df)
+                fdp_total = len(fdp_df) if fdp_df is not None else 0
+                st.metric("Total Cases", f"CMS: {cms_total:,} | FDP: {fdp_total:,}")
+            
+            with metric_col2:
+                cms_regions = len(df['region'].unique())
+                fdp_regions = len(fdp_df['region'].unique()) if fdp_df is not None else 0
+                st.metric("Regions Covered", f"CMS: {cms_regions} | FDP: {fdp_regions}")
+            
+            with metric_col3:
+                cms_date_range = "N/A"
+                fdp_date_range = "N/A"
+                if not df['creationdate'].isna().all():
+                    cms_min = df['creationdate'].min().strftime('%Y-%m') if pd.notna(df['creationdate'].min()) else "N/A"
+                    cms_max = df['creationdate'].max().strftime('%Y-%m') if pd.notna(df['creationdate'].max()) else "N/A"
+                    cms_date_range = f"{cms_min} to {cms_max}"
+                
+                if fdp_df is not None and not fdp_df['creationdate'].isna().all():
+                    try:
+                        fdp_min = fdp_df['creationdate'].min().strftime('%Y-%m') if pd.notna(fdp_df['creationdate'].min()) else "N/A"
+                        fdp_max = fdp_df['creationdate'].max().strftime('%Y-%m') if pd.notna(fdp_df['creationdate'].max()) else "N/A"
+                        fdp_date_range = f"{fdp_min} to {fdp_max}"
+                    except:
+                        fdp_date_range = "Invalid dates"
+                
+                st.write("**Date Ranges:**")
+                st.write(f"CMS: {cms_date_range}")
+                st.write(f"FDP: {fdp_date_range}")
+            
+            st.markdown("---")
+            
+            # Regional Summary Comparison
+            st.markdown("### 🗺️ Regional Summary Comparison")
+            
+            cms_col, fdp_col = st.columns(2)
+            
+            with cms_col:
+                st.markdown("#### CMS Data")
+                # CMS Regional summary
+                cms_case_counts = df.groupby('region')['caseid'].nunique().reset_index(name='Number of Cases')
+                
+                def count_cms_individuals(region):
+                    case_ids = df[df['region'] == region]['caseid'].unique()
+                    return jamati_member_df[jamati_member_df['caseid'].isin(case_ids)].shape[0]
+                
+                cms_case_counts['Number of Individuals'] = cms_case_counts['region'].apply(count_cms_individuals)
+                
+                cms_open_cases = df[df['status'].isin(['Open', 'Reopen'])]
+                cms_open_counts = cms_open_cases.groupby('region')['caseid'].nunique().reset_index(name='Open Cases')
+                cms_case_counts = cms_case_counts.merge(cms_open_counts, on='region', how='left').fillna(0)
+                
+                # Format numbers
+                cms_display = cms_case_counts.copy()
+                cms_display['Number of Cases'] = cms_display['Number of Cases'].map('{:,}'.format)
+                cms_display['Number of Individuals'] = cms_display['Number of Individuals'].map('{:,}'.format)
+                cms_display['Open Cases'] = cms_display['Open Cases'].astype(int).map('{:,}'.format)
+                cms_display = cms_display.set_index('region')
+                
+                st.dataframe(cms_display.style.set_properties(**{'font-size': '14px'}))
+            
+            with fdp_col:
+                st.markdown("#### FDP Data")
+                if fdp_df is not None:
+                    # FDP Regional summary
+                    fdp_case_counts = fdp_df.groupby('region')['caseid'].nunique().reset_index(name='Number of Cases')
+                    
+                    def count_fdp_individuals(region):
+                        region_cases = fdp_df[fdp_df['region'] == region]
+                        if 'number_in_family' in region_cases.columns:
+                            return region_cases['number_in_family'].fillna(0).sum()
+                        return 0
+                    
+                    fdp_case_counts['Number of Individuals'] = fdp_case_counts['region'].apply(count_fdp_individuals)
+                    
+                    fdp_open_cases = fdp_df[fdp_df['status'].isin(['Open', 'Reopen'])]
+                    fdp_open_counts = fdp_open_cases.groupby('region')['caseid'].nunique().reset_index(name='Open Cases')
+                    fdp_case_counts = fdp_case_counts.merge(fdp_open_counts, on='region', how='left').fillna(0)
+                    
+                    # Format numbers
+                    fdp_display = fdp_case_counts.copy()
+                    fdp_display['Number of Cases'] = fdp_display['Number of Cases'].map('{:,}'.format)
+                    fdp_display['Number of Individuals'] = fdp_display['Number of Individuals'].astype(int).map('{:,}'.format)
+                    fdp_display['Open Cases'] = fdp_display['Open Cases'].astype(int).map('{:,}'.format)
+                    fdp_display = fdp_display.set_index('region')
+                    
+                    st.dataframe(fdp_display.style.set_properties(**{'font-size': '14px'}))
+                else:
+                    st.error("FDP data not available")
+            
+            # Status Distribution Comparison
+            st.markdown("### 📊 Status Distribution Comparison")
+            
+            status_col1, status_col2 = st.columns(2)
+            
+            with status_col1:
+                st.markdown("#### CMS Status Distribution")
+                cms_status_counts = df['status'].value_counts()
+                cms_fig = px.pie(cms_status_counts, values=cms_status_counts.values, 
+                               names=cms_status_counts.index, title='CMS Case Status')
+                st.plotly_chart(cms_fig, use_container_width=True)
+            
+            with status_col2:
+                st.markdown("#### FDP Status Distribution")
+                if fdp_df is not None:
+                    fdp_status_counts = fdp_df['status'].value_counts()
+                    fdp_fig = px.pie(fdp_status_counts, values=fdp_status_counts.values, 
+                                   names=fdp_status_counts.index, title='FDP Case Status')
+                    st.plotly_chart(fdp_fig, use_container_width=True)
+                else:
+                    st.error("FDP data not available")
+            
+            # Geographic Distribution Comparison
+            st.markdown("### 🗺️ Geographic Distribution Comparison")
+            
+            map_col1, map_col2 = st.columns(2)
+            
+            with map_col1:
+                st.markdown("#### CMS Cases by State")
+                cms_state_counts = df['state'].value_counts().reset_index()
+                cms_state_counts.columns = ['state', 'count']
+                
+                cms_map = px.choropleth(
+                    cms_state_counts,
+                    locations='state',
+                    locationmode='USA-states',
+                    color='count',
+                    scope='usa',
+                    color_continuous_scale=['white', 'blue'],
+                    title='CMS Cases by State',
+                    labels={'count': 'Number of Cases'}
+                )
+                cms_map.update_layout(
+                    geo_scope='usa',
+                    margin=dict(l=0, r=0, t=30, b=0),
+                    geo=dict(
+                        showlakes=False,
+                        showland=False,
+                        bgcolor='rgba(0,0,0,0)'
+                    ),
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)'
+                )
+                st.plotly_chart(cms_map, use_container_width=True)
+            
+            with map_col2:
+                st.markdown("#### FDP Cases by State")
+                if fdp_df is not None:
+                    fdp_state_counts = fdp_df['state'].value_counts().reset_index()
+                    fdp_state_counts.columns = ['state', 'count']
+                    
+                    fdp_map = px.choropleth(
+                        fdp_state_counts,
+                        locations='state',
+                        locationmode='USA-states',
+                        color='count',
+                        scope='usa',
+                        color_continuous_scale=['white', 'green'],
+                        title='FDP Cases by State',
+                        labels={'count': 'Number of Cases'}
+                    )
+                    fdp_map.update_layout(
+                        geo_scope='usa',
+                        margin=dict(l=0, r=0, t=30, b=0),
+                        geo=dict(
+                            showlakes=False,
+                            showland=False,
+                            bgcolor='rgba(0,0,0,0)'
+                        ),
+                        paper_bgcolor='rgba(0,0,0,0)',
+                        plot_bgcolor='rgba(0,0,0,0)'
+                    )
+                    st.plotly_chart(fdp_map, use_container_width=True)
+                else:
+                    st.error("FDP data not available")
+            
+            # Timeline Comparison
+            st.markdown("### 📅 Timeline Comparison")
+            
+            timeline_col1, timeline_col2 = st.columns(2)
+            
+            with timeline_col1:
+                st.markdown("#### CMS Cases Over Time")
+                cms_timeline = df.copy()
+                cms_timeline['creationdate'] = pd.to_datetime(cms_timeline['creationdate'])
+                cms_timeline = cms_timeline[cms_timeline['creationdate'].dt.year > 2022]
+                cms_timeline['month_year'] = cms_timeline['creationdate'].dt.to_period('M')
+                cms_grouped = cms_timeline.groupby([cms_timeline['month_year'].astype(str), 'region']).size().reset_index(name='case_count')
+                
+                cms_line = px.line(cms_grouped, x='month_year', y='case_count', color='region',
+                                 title='CMS New Cases Over Time',
+                                 labels={'month_year': 'Month', 'case_count': 'Cases'})
+                st.plotly_chart(cms_line, use_container_width=True)
+            
+            with timeline_col2:
+                st.markdown("#### FDP Cases Over Time")
+                if fdp_df is not None:
+                    try:
+                        fdp_timeline = fdp_df.copy()
+                        fdp_timeline['creationdate'] = pd.to_datetime(fdp_timeline['creationdate'], errors='coerce')
+                        fdp_timeline = fdp_timeline.dropna(subset=['creationdate'])
+                        
+                        if not fdp_timeline.empty:
+                            fdp_timeline = fdp_timeline[fdp_timeline['creationdate'].dt.year > 2022]
+                            if not fdp_timeline.empty:
+                                fdp_timeline['month_year'] = fdp_timeline['creationdate'].dt.to_period('M')
+                                fdp_grouped = fdp_timeline.groupby([fdp_timeline['month_year'].astype(str), 'region']).size().reset_index(name='case_count')
+                                
+                                fdp_line = px.line(fdp_grouped, x='month_year', y='case_count', color='region',
+                                                 title='FDP New Cases Over Time',
+                                                 labels={'month_year': 'Month', 'case_count': 'Cases'})
+                                st.plotly_chart(fdp_line, use_container_width=True)
+                            else:
+                                st.info("No FDP cases found after 2022")
+                        else:
+                            st.warning("No valid FDP date data available for timeline")
+                    except Exception as e:
+                        st.error(f"Error creating FDP timeline: {e}")
+                else:
+                    st.error("FDP data not available")
 
     with jamati_demographics:
+        st.info("ℹ️ This tab currently displays CMS data only. Use the Cases tab to compare with FDP data.")
+        st.markdown("---")
         # Create two columns for side-by-side charts
         col1, col2 = st.columns(2)
 
@@ -296,6 +606,8 @@ try:
         st.dataframe(jamati_member_df.drop("legalstatus", axis=1))
         
     with children_data:
+        st.info("ℹ️ This tab currently displays CMS data only. Use the Cases tab to compare with FDP data.")
+        st.markdown("---")
         st.subheader("Children's Data (18 and Under)")
         
         # Filter children based on birth year (2025 - age <= 18, so yearofbirth >= 2007)
@@ -983,6 +1295,8 @@ try:
             st.info("No children (18 and under) found in the current dataset.")
         
     with case_lookup:
+        st.info("ℹ️ This tab currently displays CMS data only. Use the Cases tab to compare with FDP data.")
+        st.markdown("---")
         st.subheader("Settlement Case Lookup")
         
         # Initialize session state for the assessment form
