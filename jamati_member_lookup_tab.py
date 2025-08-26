@@ -137,7 +137,7 @@ def render_member_detailed_lookup(jamati_member_df, education_df, finance_df, ph
             st.markdown(f"## 👤 Detailed Information for {selected_member[firstname_col]} {selected_member[lastname_col]}")
             
             # Create tabs for different data categories
-            member_tabs = st.tabs(["Personal Info", "Education", "Social Inclusion", "Finance", "Health"])
+            member_tabs = st.tabs(["Personal Info", "Education", "Social Inclusion", "Finance", "Health", "Jamati Activity Eligibility"])
             
             with member_tabs[0]:  # Personal Info
                 render_personal_info_tab(selected_member, person_id_col, firstname_col, lastname_col)
@@ -153,6 +153,9 @@ def render_member_detailed_lookup(jamati_member_df, education_df, finance_df, ph
             
             with member_tabs[4]:  # Health
                 render_health_tab(physical_mental_health_df, person_id_col, selected_person_id)
+            
+            with member_tabs[5]:  # Jamati Activity Eligibility
+                render_jamati_activity_eligibility_tab(selected_member, firstname_col)
 
 def render_personal_info_tab(selected_member, person_id_col, firstname_col, lastname_col):
     """Render the personal info tab for a member"""
@@ -413,3 +416,27 @@ def render_health_tab(physical_mental_health_df, person_id_col, selected_person_
                     break
     else:
         st.info("No health data available for this member.")
+
+def render_jamati_activity_eligibility_tab(selected_member, firstname_col):
+    """Render the Jamati Activity Eligibility tab for a member"""
+    st.markdown("### 🎯 Jamati Activity Eligibility")
+    
+    st.info("🚧 **This tab is a work in progress** 🚧")
+    
+    st.markdown(f"**Member:** {selected_member[firstname_col]}")
+    
+    st.markdown("""
+    This section will contain eligibility information for various Jamati activities and programs, including:
+    
+    - **Educational Programs** (ESL classes, computer literacy, etc.)
+    - **Youth Programs** (leadership development, mentorship)
+    - **Community Events** (cultural celebrations, volunteer opportunities)
+    - **Support Services** (counseling, financial planning workshops)
+    - **Religious Activities** (study circles, prayer groups)
+    - **Health & Wellness Programs** (health screenings, fitness activities)
+    
+    *Eligibility criteria and program details will be added in future updates.*
+    """)
+    
+    st.markdown("---")
+    st.markdown("💡 **Coming Soon:** Automated eligibility checking based on member demographics, interests, and needs.")
