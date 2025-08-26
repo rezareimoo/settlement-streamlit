@@ -85,12 +85,12 @@ try:
     
     if df is not None:
         # Create tabs for different sections with updated titles
-        cases, case_lookup, jamati_demographics, children_data, jamati_member_lookup = st.tabs([
+        cases, case_lookup, jamati_member_lookup, jamati_demographics, children_data = st.tabs([
             "Cases (CMS + FDP + Compare)", 
             "Case Lookup (CMS Only)",
+            "Jamati Member Lookup (CMS Only)",
             "Jamati Demographics (CMS Only)", 
-            "Children's Data (CMS Only)", 
-            "Jamati Member Lookup (CMS Only)"
+            "Children's Data (CMS Only)"
         ])
 
         with cases:
@@ -128,14 +128,14 @@ try:
         with case_lookup:
             render_case_lookup_tab(df, jamati_member_df, education_df, finance_df, physical_mental_health_df, social_inclusion_agency_df)
 
+        with jamati_member_lookup:
+            render_jamati_member_lookup_tab(jamati_member_df, education_df, finance_df, physical_mental_health_df, social_inclusion_agency_df)
+
         with jamati_demographics:
             render_demographics_tab(jamati_member_df)
 
         with children_data:
             render_children_tab(df, jamati_member_df, education_df, finance_df, physical_mental_health_df, social_inclusion_agency_df)
-
-        with jamati_member_lookup:
-            render_jamati_member_lookup_tab(jamati_member_df, education_df, finance_df, physical_mental_health_df, social_inclusion_agency_df)
 
     else:
         st.error("Failed to fetch data from the database. Please check your connection.")
