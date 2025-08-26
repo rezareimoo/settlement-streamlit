@@ -7,6 +7,7 @@ from cases_tab import render_cases_tab
 from demographics_tab import render_demographics_tab
 from children_tab import render_children_tab
 from case_lookup_tab import render_case_lookup_tab
+from jamati_member_lookup_tab import render_jamati_member_lookup_tab
 
 # Set page config to wide layout to reduce padding
 st.set_page_config(layout="wide")
@@ -84,10 +85,11 @@ try:
     
     if df is not None:
         # Create tabs for different sections with updated titles
-        cases, jamati_demographics, children_data, case_lookup = st.tabs([
-            "Cases (CMS + FDP + Compare)", 
+        jamati_demographics, cases, children_data, jamati_member_lookup, case_lookup = st.tabs([
             "Jamati Demographics (CMS Only)", 
+            "Cases (CMS + FDP + Compare)", 
             "Children's Data (CMS Only)", 
+            "Jamati Member Lookup (CMS Only)",
             "Case Lookup (CMS Only)"
         ])
 
@@ -128,6 +130,9 @@ try:
 
         with children_data:
             render_children_tab(df, jamati_member_df, education_df, finance_df, physical_mental_health_df, social_inclusion_agency_df)
+
+        with jamati_member_lookup:
+            render_jamati_member_lookup_tab(jamati_member_df, education_df, finance_df, physical_mental_health_df, social_inclusion_agency_df)
 
         with case_lookup:
             render_case_lookup_tab(df, jamati_member_df, education_df, finance_df, physical_mental_health_df, social_inclusion_agency_df)
