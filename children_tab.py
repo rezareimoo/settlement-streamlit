@@ -55,32 +55,34 @@ def render_children_tab(df, jamati_member_df, education_df, finance_df, physical
         col1, col2 = st.columns(2)
         
         with col1:
-            age_counts = children_df['age'].value_counts().sort_index()
-            age_fig = px.bar(
-                x=age_counts.index,
-                y=age_counts.values,
-                title='Children Age Distribution',
-                labels={'x': 'Age', 'y': 'Number of Children'},
-                color=age_counts.values,
-                color_continuous_scale='Blues'
-            )
-            age_fig.update_layout(showlegend=False, coloraxis_showscale=False)
-            st.plotly_chart(age_fig, use_container_width=True)
+            with st.expander("📈 Children Age Distribution", expanded=True):
+                age_counts = children_df['age'].value_counts().sort_index()
+                age_fig = px.bar(
+                    x=age_counts.index,
+                    y=age_counts.values,
+                    title='Children Age Distribution',
+                    labels={'x': 'Age', 'y': 'Number of Children'},
+                    color=age_counts.values,
+                    color_continuous_scale='Blues'
+                )
+                age_fig.update_layout(showlegend=False, coloraxis_showscale=False)
+                st.plotly_chart(age_fig, use_container_width=True)
         
         with col2:
-            children_origin_counts = children_df['countryoforigin'].dropna()
-            children_origin_counts = children_origin_counts[children_origin_counts != ""].value_counts()
-            
-            if not children_origin_counts.empty:
-                origin_fig = px.pie(
-                    children_origin_counts, 
-                    values=children_origin_counts.values, 
-                    names=children_origin_counts.index, 
-                    title='Children Country of Origin Distribution'
-                )
-                st.plotly_chart(origin_fig, use_container_width=True)
-            else:
-                st.write("No country of origin data available for children.")
+            with st.expander("🌍 Children Country of Origin Distribution", expanded=True):
+                children_origin_counts = children_df['countryoforigin'].dropna()
+                children_origin_counts = children_origin_counts[children_origin_counts != ""].value_counts()
+                
+                if not children_origin_counts.empty:
+                    origin_fig = px.pie(
+                        children_origin_counts, 
+                        values=children_origin_counts.values, 
+                        names=children_origin_counts.index, 
+                        title='Children Country of Origin Distribution'
+                    )
+                    st.plotly_chart(origin_fig, use_container_width=True)
+                else:
+                    st.write("No country of origin data available for children.")
         
         # Education data for children
         st.markdown("## 📚 Children's Education Status")
@@ -118,21 +120,22 @@ def render_children_tab(df, jamati_member_df, education_df, finance_df, physical
                     st.dataframe(edu_summary_df, hide_index=True)
                 
                 with col2:
-                    # Academic performance distribution
-                    perf_col = 'academicperformance' if 'academicperformance' in children_edu_merged.columns else 'AcademicPerformance'
-                    if perf_col in children_edu_merged.columns:
-                        perf_counts = children_edu_merged[perf_col].dropna().value_counts()
-                        if not perf_counts.empty:
-                            perf_fig = px.bar(
-                                x=perf_counts.index,
-                                y=perf_counts.values,
-                                title='Academic Performance Distribution',
-                                labels={'x': 'Performance Level', 'y': 'Number of Children'},
-                                color=perf_counts.values,
-                                color_continuous_scale='Viridis'
-                            )
-                            perf_fig.update_layout(showlegend=False, coloraxis_showscale=False)
-                            st.plotly_chart(perf_fig, use_container_width=True)
+                    with st.expander("🏆 Academic Performance Distribution", expanded=True):
+                        # Academic performance distribution
+                        perf_col = 'academicperformance' if 'academicperformance' in children_edu_merged.columns else 'AcademicPerformance'
+                        if perf_col in children_edu_merged.columns:
+                            perf_counts = children_edu_merged[perf_col].dropna().value_counts()
+                            if not perf_counts.empty:
+                                perf_fig = px.bar(
+                                    x=perf_counts.index,
+                                    y=perf_counts.values,
+                                    title='Academic Performance Distribution',
+                                    labels={'x': 'Performance Level', 'y': 'Number of Children'},
+                                    color=perf_counts.values,
+                                    color_continuous_scale='Viridis'
+                                )
+                                perf_fig.update_layout(showlegend=False, coloraxis_showscale=False)
+                                st.plotly_chart(perf_fig, use_container_width=True)
         else:
             st.info("No education data available for children in the system.")
         
