@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, date
+from database import get_custom_data_by_case_id, save_custom_data, delete_custom_data
 
 def render_case_lookup_tab(df, jamati_member_df, education_df, finance_df, physical_mental_health_df, social_inclusion_agency_df):
     """Render the Case Lookup tab with comprehensive case and family member information"""
@@ -37,8 +38,26 @@ def render_case_lookup_tab(df, jamati_member_df, education_df, finance_df, physi
         # Display case information in an expandable section
         render_case_information(case_data)
         
-        # Add a Quick Form button with on-click handler to toggle form visibility
-        if st.button("Add Quick Assessment", on_click=toggle_assessment_form):
+        # Check if custom data exists for this case
+        existing_custom_data = get_custom_data_by_case_id(selected_case_id)
+        
+        # Display existing custom data if available
+        if existing_custom_data:
+            with st.expander("Quick Assessment Data", expanded=True):
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.markdown(f"**Family Progress Status:** {existing_custom_data['family_progress_status']}")
+                    st.markdown(f"**Arrival Date:** {existing_custom_data['arrival_date'].strftime('%m/%d/%Y') if existing_custom_data['arrival_date'] else 'N/A'}")
+                
+                with col2:
+                    languages = existing_custom_data['languages_spoken'] if existing_custom_data['languages_spoken'] else []
+                    languages_str = ", ".join(languages) if languages else "None specified"
+                    st.markdown(f"**Languages Spoken:** {languages_str}")
+        
+        # Add a Quick Assessment button with appropriate text
+        button_text = "Edit Quick Assessment" if existing_custom_data else "Add Quick Assessment"
+        if st.button(button_text, on_click=toggle_assessment_form):
             pass  # The on_click handler will toggle the form visibility
 
         # Show the form if the toggle is True
@@ -86,40 +105,125 @@ def render_case_information(case_data):
         st.markdown(f"**Last Log Date:** {case_data['lastlogdate'].strftime('%B %d, %Y') if pd.notna(case_data['lastlogdate']) else 'N/A'}")
 
 def render_assessment_form():
-    """Render the FDP assessment form"""
-    with st.form(key="FDP Assessment Form"):
+    """Render the Quick Assessment form"""
+    case_id = st.session_state.current_case_id
+    
+    # Load existing data if available
+    existing_data = get_custom_data_by_case_id(case_id)
+    
+    with st.form(key="Quick Assessment Form"):
         st.markdown(
             """
             <div style="background-color:#191d36; padding: 16px; border-radius: 8px; margin-bottom: 16px;">
-                <h3 style="color:#abafc7; margin:0;">FDP Assessment Form</h3>
+                <h3 style="color:#abafc7; margin:0;">Quick Assessment Form</h3>
             </div>
             """,
             unsafe_allow_html=True
         )
 
-        # Form fields
-        family_status = st.selectbox(
+        # Family Progress Status dropdown
+        progress_options = [
+            "Withdrawn/Migrated",
+            "Stalled", 
+            "Stabilizing",
+            "Developing",
+            "Self-Sufficient",
+            "Graduated"
+        ]
+        
+        default_progress = progress_options.index(existing_data['family_progress_status']) if existing_data and existing_data['family_progress_status'] in progress_options else 0
+        family_progress_status = st.selectbox(
             "Family Progress Status",
-            options=["Stable", "At Risk", "In Crisis", "Unknown"]
+            options=progress_options,
+            index=default_progress
         )
 
-        fdp_field1 = st.text_area("FDP Field 1", placeholder="Enter information here...")
-        fdp_field2 = st.text_area("FDP Field 2", placeholder="Enter information here...")
-        fdp_field3 = st.text_area("FDP Field 3", placeholder="Enter information here...")
+        # Arrival Date
+        default_arrival_date = None
+        if existing_data and existing_data['arrival_date']:
+            try:
+                if isinstance(existing_data['arrival_date'], str):
+                    default_arrival_date = datetime.strptime(existing_data['arrival_date'], '%Y-%m-%d').date()
+                else:
+                    default_arrival_date = existing_data['arrival_date']
+            except:
+                default_arrival_date = None
+                
+        arrival_date = st.date_input(
+            "Arrival Date",
+            value=default_arrival_date,
+            min_value=date(1900, 1, 1),
+            max_value=date.today(),
+            format="MM/DD/YYYY"
+        )
+
+        # Languages Spoken - multi-select
+        language_options = [
+            "English",
+            "Dari", 
+            "Pashto",
+            "Tajik",
+            "Persian",
+            "Urdu",
+            "Hindi",
+            "Gujarati"
+        ]
+        
+        default_languages = []
+        if existing_data and existing_data['languages_spoken']:
+            default_languages = existing_data['languages_spoken'] if isinstance(existing_data['languages_spoken'], list) else []
+        
+        languages_spoken = st.multiselect(
+            "Languages Spoken",
+            options=language_options,
+            default=default_languages
+        )
 
         # Form submission buttons
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
         with col1:
-            submit_button = st.form_submit_button("Submit")
+            save_button = st.form_submit_button("Save", type="primary")
         with col2:
-            clear_button = st.form_submit_button("Clear")
+            delete_button = st.form_submit_button("Delete", type="secondary")
+        with col3:
+            cancel_button = st.form_submit_button("Cancel")
 
-        if submit_button:
-            st.success("Form submitted successfully! (Note: This is a dummy form, data is not saved)")
-            st.session_state.show_assessment_form = False  # Hide form after submission
+        if save_button:
+            # Validate that arrival_date is not None
+            if arrival_date is None:
+                st.error("Please select an arrival date.")
+            else:
+                # Save to database
+                success = save_custom_data(
+                    case_id=case_id,
+                    family_progress_status=family_progress_status,
+                    languages_spoken=languages_spoken,
+                    arrival_date=arrival_date
+                )
+                
+                if success:
+                    action = "updated" if existing_data else "saved"
+                    st.success(f"Quick assessment {action} successfully!")
+                    st.session_state.show_assessment_form = False
+                    st.rerun()
+                else:
+                    st.error("Error saving quick assessment. Please try again.")
 
-        if clear_button:
-            st.info("Form cleared (refresh to reset fields)")
+        if delete_button:
+            if existing_data:
+                success = delete_custom_data(case_id)
+                if success:
+                    st.success("Quick assessment deleted successfully!")
+                    st.session_state.show_assessment_form = False
+                    st.rerun()
+                else:
+                    st.error("Error deleting quick assessment. Please try again.")
+            else:
+                st.warning("No existing data to delete.")
+
+        if cancel_button:
+            st.session_state.show_assessment_form = False
+            st.rerun()
 
 def render_family_member_tabs(member, person_id, education_df, social_inclusion_agency_df, finance_df, physical_mental_health_df):
     """Render tabs for each family member with their detailed information"""
