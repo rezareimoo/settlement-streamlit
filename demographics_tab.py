@@ -9,7 +9,7 @@ def render_demographics_tab(jamati_member_df):
     col1, col2 = st.columns(2)
 
     with col1:
-        with st.expander("🌍 Country of Origin Distribution", expanded=True):
+        with st.expander("🌍 Country of Origin Distribution", expanded=False):
             origin_counts = jamati_member_df['countryoforigin'].dropna()
             origin_counts = origin_counts[origin_counts != ""].value_counts()
 
@@ -17,7 +17,7 @@ def render_demographics_tab(jamati_member_df):
             st.plotly_chart(fig, use_container_width=True)
     
     with col2:
-        with st.expander("📊 Age Distribution", expanded=True):
+        with st.expander("📊 Age Distribution", expanded=False):
             # Calculate age from yearofbirth
             if 'yearofbirth' in jamati_member_df.columns:
                 # Filter out rows with NaN or empty yearofbirth
@@ -39,7 +39,7 @@ def render_demographics_tab(jamati_member_df):
                 st.write("Year of birth data is not available in the dataset.")
 
     # Add education level visualization
-    with st.expander("🎓 Education Level Distribution", expanded=True):
+    with st.expander("🎓 Education Level Distribution", expanded=False):
         if 'educationlevel' in jamati_member_df.columns:
             # Filter out null values and empty strings, then get value counts
             education_counts = jamati_member_df['educationlevel'].dropna()

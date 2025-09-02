@@ -55,7 +55,7 @@ def render_children_tab(df, jamati_member_df, education_df, finance_df, physical
         col1, col2 = st.columns(2)
         
         with col1:
-            with st.expander("📈 Children Age Distribution", expanded=True):
+            with st.expander("📈 Children Age Distribution", expanded=False):
                 age_counts = children_df['age'].value_counts().sort_index()
                 age_fig = px.bar(
                     x=age_counts.index,
@@ -69,7 +69,7 @@ def render_children_tab(df, jamati_member_df, education_df, finance_df, physical
                 st.plotly_chart(age_fig, use_container_width=True)
         
         with col2:
-            with st.expander("🌍 Children Country of Origin Distribution", expanded=True):
+            with st.expander("🌍 Children Country of Origin Distribution", expanded=False):
                 children_origin_counts = children_df['countryoforigin'].dropna()
                 children_origin_counts = children_origin_counts[children_origin_counts != ""].value_counts()
                 
@@ -120,7 +120,7 @@ def render_children_tab(df, jamati_member_df, education_df, finance_df, physical
                     st.dataframe(edu_summary_df, hide_index=True)
                 
                 with col2:
-                    with st.expander("🏆 Academic Performance Distribution", expanded=True):
+                    with st.expander("🏆 Academic Performance Distribution", expanded=False):
                         # Academic performance distribution
                         perf_col = 'academicperformance' if 'academicperformance' in children_edu_merged.columns else 'AcademicPerformance'
                         if perf_col in children_edu_merged.columns:
