@@ -425,18 +425,36 @@ def render_jamati_activity_eligibility_tab(selected_member, firstname_col):
     
     st.markdown(f"**Member:** {selected_member[firstname_col]}")
     
-    st.markdown("""
-    This section will contain eligibility information for various Jamati activities and programs, including:
+    # Determine age (use precomputed 'age' if available, else compute from year of birth)
+    age_value = None
+    if 'age' in selected_member.index and pd.notna(selected_member['age']) and isinstance(selected_member['age'], (int, float)):
+        age_value = int(selected_member['age'])
+    else:
+        year_col = 'yearofbirth' if 'yearofbirth' in selected_member.index else 'YearOfBirth'
+        if year_col in selected_member.index and pd.notna(selected_member[year_col]) and selected_member[year_col] not in (0, ""):
+            current_year = 2025
+            try:
+                age_value = int(current_year - int(selected_member[year_col]))
+            except Exception:
+                age_value = None
+
+    # Compute Camp Mosaic eligibility based on age
+    st.markdown("## 🏕️ Camp Mosaic Eligibility Check")
+    st.markdown("#### Ages 6-13: Eligible for Camp Mosaic Participant")
+    st.markdown(f"#### **🎂 {selected_member[firstname_col]}'s Age:** {age_value if age_value is not None else '❓ Unknown'}")
+    if age_value is None:
+        eligibility_text = "❓ Unknown (insufficient age information)"
+        st.warning(f"**🎯 Status:** {eligibility_text}")
+    elif age_value < 6:
+        eligibility_text = "⛔ Not eligible for Camp Mosaic (under 6 years old)"
+        st.error(f"**🎯 Status:** {eligibility_text}")
+    elif 6 <= age_value <= 13:
+        eligibility_text = "✨ Eligible – Camp Mosaic Participant!"
+        st.success(f"**🎯 Status:** {eligibility_text}")
+    else:
+        eligibility_text = "👑 Eligible – Camp Mosaic Counselor!"
+        st.info(f"**🎯 Status:** {eligibility_text}")
+
+    # Display results with fun emojis
     
-    - **Educational Programs** (ESL classes, computer literacy, etc.)
-    - **Youth Programs** (leadership development, mentorship)
-    - **Community Events** (cultural celebrations, volunteer opportunities)
-    - **Support Services** (counseling, financial planning workshops)
-    - **Religious Activities** (study circles, prayer groups)
-    - **Health & Wellness Programs** (health screenings, fitness activities)
     
-    *Eligibility criteria and program details will be added in future updates.*
-    """)
-    
-    st.markdown("---")
-    st.markdown("💡 **Coming Soon:** Automated eligibility checking based on member demographics, interests, and needs.")
