@@ -421,9 +421,6 @@ def render_jamati_activity_eligibility_tab(selected_member, firstname_col):
     """Render the Jamati Activity Eligibility tab for a member"""
     st.markdown("### 🎯 Jamati Activity Eligibility")
     
-    st.info("🚧 **This tab is a work in progress** 🚧")
-    
-    st.markdown(f"**Member:** {selected_member[firstname_col]}")
     
     # Determine age (use precomputed 'age' if available, else compute from year of birth)
     age_value = None

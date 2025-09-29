@@ -48,24 +48,34 @@ def render_single_view(df, jamati_member_df, data_source):
         )
     
     # Apply date filter to the dataframe
+    date_range_text = ""
     if start_date and end_date:
         start_datetime = pd.to_datetime(start_date)
         end_datetime = pd.to_datetime(end_date)
         df = df[(df['creationdate'] >= start_datetime) & (df['creationdate'] <= end_datetime)]
+        date_range_text = f"{start_date} to {end_date}"
         st.info(f"Showing data from {start_date} to {end_date}")
     elif start_date:
         start_datetime = pd.to_datetime(start_date)
         df = df[df['creationdate'] >= start_datetime]
+        date_range_text = f"from {start_date}"
         st.info(f"Showing data from {start_date} onwards")
     elif end_date:
         end_datetime = pd.to_datetime(end_date)
         df = df[df['creationdate'] <= end_datetime]
+        date_range_text = f"up to {end_date}"
         st.info(f"Showing data up to {end_date}")
+    else:
+        date_range_text = "all available data"
     
     # Region filter
     regions = df['region'].unique()
     selected_region = st.selectbox("Select Region", options=["All"] + list(regions), key=f"region_filter_{data_source}")
     
+    st.markdown("---")
+    
+    # Current Date Range heading
+    st.markdown(f"### 📅 Current Date Range: {date_range_text}")
     st.markdown("---")
     
     # --- Summary Table at the Top ---
@@ -184,7 +194,7 @@ def render_single_view(df, jamati_member_df, data_source):
             # Display pie chart
             status_counts = filtered_df['status'].value_counts()
             fig = px.pie(status_counts, values=status_counts.values, names=status_counts.index, 
-                         title=f'Case Status Distribution ({data_label})')
+                         title=f'Case Status Distribution ({data_label}) - {date_range_text}')
             st.plotly_chart(fig, use_container_width=True)
 
     with map_col:
@@ -201,7 +211,7 @@ def render_single_view(df, jamati_member_df, data_source):
                 color='count',
                 scope='usa',
                 color_continuous_scale=['white', 'blue'],
-                title=f'Number of Cases by State ({data_label})',
+                title=f'Number of Cases by State ({data_label}) - {date_range_text}',
                 labels={'count': 'Number of Cases'}
             )
             
@@ -233,7 +243,7 @@ def render_single_view(df, jamati_member_df, data_source):
                 x='region', 
                 y='count', 
                 color='status',
-                title=f'Case Status Distribution by Region ({data_label})',
+                title=f'Case Status Distribution by Region ({data_label}) - {date_range_text}',
                 labels={'count': 'Number of Cases', 'region': 'Region'},
                 color_discrete_sequence=px.colors.qualitative.Set3
             )
@@ -277,7 +287,7 @@ def render_single_view(df, jamati_member_df, data_source):
 
             # Create the line chart
             line_fig = px.line(df_combined, x='month_year', y='case_count', color='region', 
-                               title=f'New Cases Over Time by Region - Monthly ({data_label})', 
+                               title=f'New Cases Over Time by Region - Monthly ({data_label}) - {date_range_text}', 
                                labels={'month_year': 'Month', 'case_count': 'Number of Cases'})
             
             # Update layout to double the height
@@ -332,25 +342,31 @@ def render_comparison_view(cms_df, jamati_member_df, fdp_df):
         )
     
     # Apply date filter to both dataframes
+    date_range_text = ""
     if start_date and end_date:
         start_datetime = pd.to_datetime(start_date)
         end_datetime = pd.to_datetime(end_date)
         cms_df = cms_df[(cms_df['creationdate'] >= start_datetime) & (cms_df['creationdate'] <= end_datetime)]
         if fdp_df is not None:
             fdp_df = fdp_df[(fdp_df['creationdate'] >= start_datetime) & (fdp_df['creationdate'] <= end_datetime)]
+        date_range_text = f"{start_date} to {end_date}"
         st.info(f"Showing data from {start_date} to {end_date}")
     elif start_date:
         start_datetime = pd.to_datetime(start_date)
         cms_df = cms_df[cms_df['creationdate'] >= start_datetime]
         if fdp_df is not None:
             fdp_df = fdp_df[fdp_df['creationdate'] >= start_datetime]
+        date_range_text = f"from {start_date}"
         st.info(f"Showing data from {start_date} onwards")
     elif end_date:
         end_datetime = pd.to_datetime(end_date)
         cms_df = cms_df[cms_df['creationdate'] <= end_datetime]
         if fdp_df is not None:
             fdp_df = fdp_df[fdp_df['creationdate'] <= end_datetime]
+        date_range_text = f"up to {end_date}"
         st.info(f"Showing data up to {end_date}")
+    else:
+        date_range_text = "all available data"
     
     # Region filter for comparison view
     # Get unique regions from both datasets
@@ -366,6 +382,10 @@ def render_comparison_view(cms_df, jamati_member_df, fdp_df):
         if fdp_df is not None:
             fdp_df = fdp_df[fdp_df['region'] == selected_region]
     
+    st.markdown("---")
+    
+    # Current Date Range heading
+    st.markdown(f"### 📅 Current Date Range: {date_range_text}")
     st.markdown("---")
     
     st.markdown("## 🔄 Data Source Comparison")
@@ -432,7 +452,7 @@ def render_comparison_view(cms_df, jamati_member_df, fdp_df):
             st.markdown("#### CMS Status Distribution")
             cms_status_counts = cms_df['status'].value_counts()
             cms_fig = px.pie(cms_status_counts, values=cms_status_counts.values, 
-                            names=cms_status_counts.index, title='CMS Case Status')
+                            names=cms_status_counts.index, title=f'CMS Case Status - {date_range_text}')
             st.plotly_chart(cms_fig, use_container_width=True)
         
         with status_col2:
@@ -440,7 +460,7 @@ def render_comparison_view(cms_df, jamati_member_df, fdp_df):
             if fdp_df is not None:
                 fdp_status_counts = fdp_df['status'].value_counts()
                 fdp_fig = px.pie(fdp_status_counts, values=fdp_status_counts.values, 
-                               names=fdp_status_counts.index, title='FDP Case Status')
+                               names=fdp_status_counts.index, title=f'FDP Case Status - {date_range_text}')
                 st.plotly_chart(fdp_fig, use_container_width=True)
             else:
                 st.error("FDP data not available")
@@ -459,7 +479,7 @@ def render_comparison_view(cms_df, jamati_member_df, fdp_df):
                     x='region', 
                     y='count', 
                     color='status',
-                    title='CMS Case Status by Region',
+                    title=f'CMS Case Status by Region - {date_range_text}',
                     labels={'count': 'Number of Cases', 'region': 'Region'},
                     color_discrete_sequence=px.colors.qualitative.Set3
                 )
@@ -492,7 +512,7 @@ def render_comparison_view(cms_df, jamati_member_df, fdp_df):
                         x='region', 
                         y='count', 
                         color='status',
-                        title='FDP Case Status by Region',
+                        title=f'FDP Case Status by Region - {date_range_text}',
                         labels={'count': 'Number of Cases', 'region': 'Region'},
                         color_discrete_sequence=px.colors.qualitative.Set3
                     )
