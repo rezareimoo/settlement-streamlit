@@ -14,7 +14,8 @@ CREATE TABLE SettlementCase (
 	STATE VARCHAR(2),
 	ZIP VARCHAR(5),
     AssignedTo VARCHAR(100),
-	NumFamilyEmployed INT -- Use as example
+	NumFamilyEmployed INT,
+    inputtype VARCHAR(50)
 );
 
 CREATE TABLE JamatiMember (

@@ -267,6 +267,22 @@ def render_education_tab(education_df, person_id_col, selected_person_id):
             disability_col = 'hasdisability' if 'hasdisability' in edu.index else 'HasDisability'
             if disability_col in edu.index:
                 st.markdown(f"**Has Disability:** {'Yes' if edu[disability_col] else 'No'}")
+        
+        # Display all comments
+        comments = []
+        comment_fields = [
+            'comfortablewithteachercomments',
+            'hasotherchallengescomments', 
+            'educationcomments'
+        ]
+        
+        for field in comment_fields:
+            if field in edu.index and pd.notna(edu[field]) and str(edu[field]).strip():
+                comments.append(str(edu[field]).strip())
+        
+        if comments:
+            st.markdown("### Comments")
+            st.markdown("**Comments:** " + "\n\n".join(comments))
     else:
         st.info("No education data available for this member.")
 
@@ -314,6 +330,25 @@ def render_social_inclusion_tab(social_inclusion_agency_df, person_id_col, selec
                 if col in social.index and pd.notna(social[col]):
                     st.markdown(f"**JK Attendance Frequency:** {social[col]}")
                     break
+        
+        # Display all comments
+        comments = []
+        comment_fields = [
+            'socialsupportcomments',
+            'familyfriendconnectioncomments',
+            'familyrelationshipcomments',
+            'reasonfornotattendingjk',
+            'cellphoneaccesscomments',
+            'currentsituationcomments'
+        ]
+        
+        for field in comment_fields:
+            if field in social.index and pd.notna(social[field]) and str(social[field]).strip():
+                comments.append(str(social[field]).strip())
+        
+        if comments:
+            st.markdown("### Comments")
+            st.markdown("**Comments:** " + "\n\n".join(comments))
     else:
         st.info("No social inclusion data available for this member.")
 
@@ -367,6 +402,26 @@ def render_finance_tab(finance_df, person_id_col, selected_person_id):
                 if col in finance.index:
                     st.markdown(f"**Receives Financial Support:** {'Yes' if finance[col] else 'No'}")
                     break
+        
+        # Display all comments
+        comments = []
+        comment_fields = [
+            'governmentbenefits',
+            'nogovernmentbenefitscomments',
+            'assetscomments',
+            'debtcomments',
+            'financialsupportcomments',
+            'helpmanagingfinancecomments',
+            'sharecontactinfoforfinplanningcomments'
+        ]
+        
+        for field in comment_fields:
+            if field in finance.index and pd.notna(finance[field]) and str(finance[field]).strip():
+                comments.append(str(finance[field]).strip())
+        
+        if comments:
+            st.markdown("### Comments")
+            st.markdown("**Comments:** " + "\n\n".join(comments))
     else:
         st.info("No financial data available for this member.")
 
@@ -414,6 +469,33 @@ def render_health_tab(physical_mental_health_df, person_id_col, selected_person_
                 if col in health.index:
                     st.markdown(f"**Currently in Counseling:** {'Yes' if health[col] else 'No'}")
                     break
+        
+        # Display all comments
+        comments = []
+        comment_fields = [
+            'medicalcomments',
+            'costpreventingmedicalcarecomments',
+            'healthinsurancecomments',
+            'primarycaredoctorcomments',
+            'preventivecareexamscomments',
+            'shareinfowithakhbcomments',
+            'physicaldisabilitycomments',
+            'littleinterestcomments',
+            'depressioncomments',
+            'anxiouscomments',
+            'worrycomments',
+            'familyrelationshipcomments',
+            'substanceusecomments',
+            'stressmanagementcomments'
+        ]
+        
+        for field in comment_fields:
+            if field in health.index and pd.notna(health[field]) and str(health[field]).strip():
+                comments.append(str(health[field]).strip())
+        
+        if comments:
+            st.markdown("### Comments")
+            st.markdown("**Comments:** " + "\n\n".join(comments))
     else:
         st.info("No health data available for this member.")
 
