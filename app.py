@@ -25,7 +25,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("Settlement 360")
-st.markdown("**Last Data Sync:** 09-19-2025")
+st.markdown("**Last Data Sync:** 09-30-2025")
 
 def load_fdp_data():
     """Load and process FDP data"""
