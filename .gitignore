@@ -17,6 +17,9 @@ eggs/
 lib/
 lib64/
 parts/
+
+# Allow Next.js lib folder
+!settlement-nextjs/lib/
 sdist/
 var/
 wheels/
