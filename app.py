@@ -2,7 +2,7 @@ import streamlit as st
 import psycopg2
 import pandas as pd
 from config import DATABASE_URL
-from database import fetch_all_data
+from database import fetch_all_data, authenticate_user
 from cases_tab import render_cases_tab
 from demographics_tab import render_demographics_tab
 from children_tab import render_children_tab
@@ -24,15 +24,68 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.title("Settlement 360")
-st.markdown("**Last Data Sync:** 09-30-2025")
+# Initialize session state
+if 'authenticated' not in st.session_state:
+    st.session_state.authenticated = False
+if 'user_id' not in st.session_state:
+    st.session_state.user_id = None
+if 'user_email' not in st.session_state:
+    st.session_state.user_email = None
+if 'user_name' not in st.session_state:
+    st.session_state.user_name = None
+if 'user_regions' not in st.session_state:
+    st.session_state.user_regions = []
 
-def load_fdp_data():
+def render_login():
+    """Render the login screen"""
+    st.title("Settlement 360 - Login")
+    st.markdown("Please enter your credentials to access the application.")
+    
+    with st.form("login_form"):
+        email = st.text_input("Email", placeholder="Enter your email address")
+        password = st.text_input("Password", type="password", placeholder="Enter your password")
+        submit_button = st.form_submit_button("Login")
+        
+        if submit_button:
+            if email and password:
+                user = authenticate_user(email, password)
+                if user:
+                    st.session_state.authenticated = True
+                    st.session_state.user_id = user['id']
+                    st.session_state.user_email = user['email']
+                    st.session_state.user_name = f"{user['first_name']} {user['last_name']}"
+                    st.session_state.user_regions = user['regions'] if user['regions'] else []
+                    
+                    # Print user information and available regions
+                    print(f"Login successful for user: {user['email']}")
+                    print(f"User ID: {user['id']}")
+                    print(f"User Name: {user['first_name']} {user['last_name']}")
+                    print(f"Available Regions: {st.session_state.user_regions}")
+                    if st.session_state.user_regions:
+                        print(f"Number of regions accessible: {len(st.session_state.user_regions)}")
+                    else:
+                        print("Warning: User has no regions assigned - will have access to all data")
+                    
+                    st.success("Login successful!")
+                    st.rerun()
+                else:
+                    st.error("Invalid email or password. Please try again.")
+            else:
+                st.warning("Please enter both email and password.")
+
+def load_fdp_data(allowed_regions=None):
     """Load and process FDP data"""
     try:
         conn_fdp = psycopg2.connect(DATABASE_URL)
-        fdp_query = "SELECT * FROM fdp_cases"
-        fdp_raw = pd.read_sql(fdp_query, conn_fdp)
+        
+        # Build region filter if regions are provided
+        if allowed_regions and len(allowed_regions) > 0:
+            placeholders = ','.join(['%s'] * len(allowed_regions))
+            fdp_query = f"SELECT * FROM fdp_cases WHERE region IN ({placeholders})"
+            fdp_raw = pd.read_sql(fdp_query, conn_fdp, params=allowed_regions)
+        else:
+            fdp_query = "SELECT * FROM fdp_cases"
+            fdp_raw = pd.read_sql(fdp_query, conn_fdp)
         conn_fdp.close()
         
         # Map FDP fields to CMS structure
@@ -80,67 +133,88 @@ def load_fdp_data():
         st.error(f"Error loading FDP data: {e}")
         return None
 
-# Fetch all data from the database
-try:
-    df, jamati_member_df, education_df, finance_df, physical_mental_health_df, social_inclusion_agency_df = fetch_all_data()
+# Check authentication
+if not st.session_state.authenticated:
+    render_login()
+else:
+    # Show logout button in sidebar
+    with st.sidebar:
+        st.markdown(f"**Logged in as:** {st.session_state.user_name}")
+        st.markdown(f"**Email:** {st.session_state.user_email}")
+        if st.button("Logout"):
+            st.session_state.authenticated = False
+            st.session_state.user_id = None
+            st.session_state.user_email = None
+            st.session_state.user_name = None
+            st.session_state.user_regions = []
+            st.rerun()
     
-    if df is not None:
-        # Create tabs for different sections with updated titles
-        cases, case_lookup, jamati_member_lookup, jamati_demographics, children_data = st.tabs([
-            "Cases (CMS + FDP + Compare)", 
-            "Case Lookup (CMS Only)",
-            "Jamati Member Lookup (CMS Only)",
-            "Jamati Demographics (CMS Only)", 
-            "Children's Data (CMS Only)"
-        ])
+    st.title("Settlement 360")
+    st.markdown("**Last Data Sync:** 09-30-2025")
+    
+    # Fetch all data from the database with region filtering
+    try:
+        df, jamati_member_df, education_df, finance_df, physical_mental_health_df, social_inclusion_agency_df = fetch_all_data(
+            allowed_regions=st.session_state.user_regions if st.session_state.user_regions else None
+        )
+        
+        if df is not None:
+            # Create tabs for different sections with updated titles
+            cases, case_lookup, jamati_member_lookup, jamati_demographics, children_data = st.tabs([
+                "Cases (CMS + FDP + Compare)", 
+                "Case Lookup (CMS Only)",
+                "Jamati Member Lookup (CMS Only)",
+                "Jamati Demographics (CMS Only)", 
+                "Children's Data (CMS Only)"
+            ])
 
-        with cases:
-            # Data source selection
-            st.markdown("### 📊 Data Source Selection")
-            data_source = st.radio(
-                "Select data source:",
-                options=["CMS Data", "FDP Data", "Compare Both"],
-                horizontal=True,
-                key="data_source_selector"
-            )
-            st.markdown("---")
-            
-            # Load FDP data if needed
-            fdp_df = None
-            if data_source in ["FDP Data", "Compare Both"]:
-                fdp_df = load_fdp_data()
-                if fdp_df is None:
-                    data_source = "CMS Data"  # Fallback to CMS
-            
-            # Select which dataset to use
-            if data_source == "CMS Data":
-                working_df = df.copy()
-                working_jamati_df = jamati_member_df.copy()
-            elif data_source == "FDP Data" and fdp_df is not None:
-                working_df = fdp_df.copy()
-                working_jamati_df = pd.DataFrame()  # FDP doesn't have jamati member details
-            else:  # Compare Both
-                working_df = df.copy()
-                working_jamati_df = jamati_member_df.copy()
-            
-            # Render the cases tab with the selected data
-            render_cases_tab(working_df, working_jamati_df, data_source, fdp_df if data_source == "Compare Both" else None)
+            with cases:
+                # Data source selection
+                st.markdown("### 📊 Data Source Selection")
+                data_source = st.radio(
+                    "Select data source:",
+                    options=["CMS Data", "FDP Data", "Compare Both"],
+                    horizontal=True,
+                    key="data_source_selector"
+                )
+                st.markdown("---")
+                
+                # Load FDP data if needed
+                fdp_df = None
+                if data_source in ["FDP Data", "Compare Both"]:
+                    fdp_df = load_fdp_data(allowed_regions=st.session_state.user_regions if st.session_state.user_regions else None)
+                    if fdp_df is None:
+                        data_source = "CMS Data"  # Fallback to CMS
+                
+                # Select which dataset to use
+                if data_source == "CMS Data":
+                    working_df = df.copy()
+                    working_jamati_df = jamati_member_df.copy()
+                elif data_source == "FDP Data" and fdp_df is not None:
+                    working_df = fdp_df.copy()
+                    working_jamati_df = pd.DataFrame()  # FDP doesn't have jamati member details
+                else:  # Compare Both
+                    working_df = df.copy()
+                    working_jamati_df = jamati_member_df.copy()
+                
+                # Render the cases tab with the selected data
+                render_cases_tab(working_df, working_jamati_df, data_source, fdp_df if data_source == "Compare Both" else None, user_regions=st.session_state.user_regions)
 
-        with case_lookup:
-            render_case_lookup_tab(df, jamati_member_df, education_df, finance_df, physical_mental_health_df, social_inclusion_agency_df)
+            with case_lookup:
+                render_case_lookup_tab(df, jamati_member_df, education_df, finance_df, physical_mental_health_df, social_inclusion_agency_df)
 
-        with jamati_member_lookup:
-            render_jamati_member_lookup_tab(jamati_member_df, education_df, finance_df, physical_mental_health_df, social_inclusion_agency_df)
+            with jamati_member_lookup:
+                render_jamati_member_lookup_tab(jamati_member_df, education_df, finance_df, physical_mental_health_df, social_inclusion_agency_df)
 
-        with jamati_demographics:
-            render_demographics_tab(jamati_member_df)
+            with jamati_demographics:
+                render_demographics_tab(jamati_member_df)
 
-        with children_data:
-            render_children_tab(df, jamati_member_df, education_df, finance_df, physical_mental_health_df, social_inclusion_agency_df)
+            with children_data:
+                render_children_tab(df, jamati_member_df, education_df, finance_df, physical_mental_health_df, social_inclusion_agency_df)
 
-    else:
-        st.error("Failed to fetch data from the database. Please check your connection.")
+        else:
+            st.error("Failed to fetch data from the database. Please check your connection.")
 
-except Exception as e:
-    st.error(f"An error occurred: {e}")
-    print(f"Error in main app: {e}")
+    except Exception as e:
+        st.error(f"An error occurred: {e}")
+        print(f"Error in main app: {e}")

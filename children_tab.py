@@ -27,28 +27,42 @@ def render_children_tab(df, jamati_member_df, education_df, finance_df, physical
         # Summary table showing children linked to active cases per region
         st.markdown("## 📊 Children Summary by Region")
         
-        regions = df['region'].unique()
-        active_cases = df[df['status'].isin(['Open', 'Reopen'])]['caseid'].unique()
-        children_active_cases = children_df[children_df['caseid'].isin(active_cases)]
+        # Check if df has region column and data
+        if df.empty or 'region' not in df.columns:
+            st.info("No case data available for children summary.")
+        else:
+            regions = df['region'].dropna().unique()
+            if len(regions) > 0:
+                active_cases = df[df['status'].isin(['Open', 'Reopen'])]['caseid'].unique()
+                children_active_cases = children_df[children_df['caseid'].isin(active_cases)]
+                
+                children_summary = []
+                for region in regions:
+                    region_cases = df[df['region'] == region]['caseid'].unique()
+                    region_children = children_df[children_df['caseid'].isin(region_cases)]
+                    region_active_children = children_active_cases[children_active_cases['caseid'].isin(region_cases)]
+                    
+                    children_summary.append({
+                        'Region': region,
+                        'Total Children': len(region_children),
+                        'Children in Active Cases': len(region_active_children)
+                    })
+                
+                if children_summary:
+                    summary_df = pd.DataFrame(children_summary)
+                    if not summary_df.empty and 'Total Children' in summary_df.columns:
+                        summary_df['Total Children'] = summary_df['Total Children'].map('{:,}'.format)
+                        summary_df['Children in Active Cases'] = summary_df['Children in Active Cases'].map('{:,}'.format)
+                        summary_df = summary_df.set_index('Region')
+                        
+                        st.dataframe(summary_df.style.set_properties(**{'font-size': '16px'}))
+                    else:
+                        st.info("No children summary data available.")
+                else:
+                    st.info("No children summary data to display.")
+            else:
+                st.info("No region data available for children summary.")
         
-        children_summary = []
-        for region in regions:
-            region_cases = df[df['region'] == region]['caseid'].unique()
-            region_children = children_df[children_df['caseid'].isin(region_cases)]
-            region_active_children = children_active_cases[children_active_cases['caseid'].isin(region_cases)]
-            
-            children_summary.append({
-                'Region': region,
-                'Total Children': len(region_children),
-                'Children in Active Cases': len(region_active_children)
-            })
-        
-        summary_df = pd.DataFrame(children_summary)
-        summary_df['Total Children'] = summary_df['Total Children'].map('{:,}'.format)
-        summary_df['Children in Active Cases'] = summary_df['Children in Active Cases'].map('{:,}'.format)
-        summary_df = summary_df.set_index('Region')
-        
-        st.dataframe(summary_df.style.set_properties(**{'font-size': '16px'}))
         st.markdown("---")
         
         # Charts

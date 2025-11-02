@@ -12,43 +12,78 @@ def connect_to_database():
         print(f"Error connecting to the database: {e}")
         return None
 
-def fetch_all_data():
-    """Fetch all required data from the database"""
+def fetch_all_data(allowed_regions=None):
+    """Fetch all required data from the database
+    
+    Args:
+        allowed_regions: Optional list of region codes to filter by. If None, returns all data.
+    
+    Returns:
+        Tuple of dataframes: (df, jamati_member_df, education_df, finance_df, physical_mental_health_df, social_inclusion_agency_df)
+    """
     try:
         conn = connect_to_database()
         if not conn:
             return None, None, None, None, None, None
         
+        # Build region filter clause if regions are provided
         # Fetch data from all tables
         print("Fetching settlement case data...")
-        settlement_query = "SELECT * FROM SettlementCase"
-        df = pd.read_sql(settlement_query, conn)
+        if allowed_regions and len(allowed_regions) > 0:
+            # Use parameterized query for region filtering
+            placeholders = ','.join(['%s'] * len(allowed_regions))
+            settlement_query = f"SELECT * FROM SettlementCase WHERE Region IN ({placeholders})"
+            df = pd.read_sql(settlement_query, conn, params=allowed_regions)
+        else:
+            settlement_query = "SELECT * FROM SettlementCase"
+            df = pd.read_sql(settlement_query, conn)
         print("Settlement case data fetched successfully!")
         
-        print("Fetching jamati member data...")
-        jamati_member_query = "SELECT * FROM JamatiMember"
-        jamati_member_df = pd.read_sql(jamati_member_query, conn)
-        print("Jamati member data fetched successfully!")
+        # If regions filtered, get only case IDs from filtered cases
+        if allowed_regions and len(allowed_regions) > 0 and not df.empty:
+            case_ids = df['caseid'].unique().tolist()
+            placeholders = ','.join(['%s'] * len(case_ids))
+            jamati_member_query = f"SELECT * FROM JamatiMember WHERE CaseID IN ({placeholders})"
+            print("Fetching jamati member data...")
+            jamati_member_df = pd.read_sql(jamati_member_query, conn, params=case_ids)
+            print("Jamati member data fetched successfully!")
+        else:
+            print("Fetching jamati member data...")
+            jamati_member_query = "SELECT * FROM JamatiMember"
+            jamati_member_df = pd.read_sql(jamati_member_query, conn)
+            print("Jamati member data fetched successfully!")
         
-        print("Fetching education data...")
-        education_query = "SELECT * FROM Education"
-        education_df = pd.read_sql(education_query, conn)
-        print("Education data fetched successfully!")
-        
-        print("Fetching finance data...")
-        finance_query = "SELECT * FROM Finance"
-        finance_df = pd.read_sql(finance_query, conn)
-        print("Finance data fetched successfully!")
-        
-        print("Fetching physical and mental health data...")
-        physical_mental_health_query = "SELECT * FROM PhysicalMentalHealth"
-        physical_mental_health_df = pd.read_sql(physical_mental_health_query, conn)
-        print("Physical and mental health data fetched successfully!")
-        
-        print("Fetching social inclusion agency data...")
-        social_inclusion_agency_query = "SELECT * FROM SocialInclusionAgency"
-        social_inclusion_agency_df = pd.read_sql(social_inclusion_agency_query, conn)
-        print("Social inclusion agency data fetched successfully!")
+        # Filter other tables by PersonID if we have filtered jamati members
+        if not jamati_member_df.empty:
+            person_ids = jamati_member_df['personid'].unique().tolist()
+            placeholders = ','.join(['%s'] * len(person_ids))
+            
+            print("Fetching education data...")
+            education_query = f"SELECT * FROM Education WHERE PersonID IN ({placeholders})"
+            education_df = pd.read_sql(education_query, conn, params=person_ids)
+            print("Education data fetched successfully!")
+            
+            print("Fetching finance data...")
+            finance_query = f"SELECT * FROM Finance WHERE PersonID IN ({placeholders})"
+            finance_df = pd.read_sql(finance_query, conn, params=person_ids)
+            print("Finance data fetched successfully!")
+            
+            print("Fetching physical and mental health data...")
+            physical_mental_health_query = f"SELECT * FROM PhysicalMentalHealth WHERE PersonID IN ({placeholders})"
+            physical_mental_health_df = pd.read_sql(physical_mental_health_query, conn, params=person_ids)
+            print("Physical and mental health data fetched successfully!")
+            
+            print("Fetching social inclusion agency data...")
+            social_inclusion_agency_query = f"SELECT * FROM SocialInclusionAgency WHERE PersonID IN ({placeholders})"
+            social_inclusion_agency_df = pd.read_sql(social_inclusion_agency_query, conn, params=person_ids)
+            print("Social inclusion agency data fetched successfully!")
+        else:
+            # If no jamati members, return empty dataframes
+            print("No jamati member data found. Returning empty dataframes.")
+            education_df = pd.DataFrame()
+            finance_df = pd.DataFrame()
+            physical_mental_health_df = pd.DataFrame()
+            social_inclusion_agency_df = pd.DataFrame()
         
         # Close the connection
         conn.close()
@@ -164,3 +199,55 @@ def delete_custom_data(case_id):
     except Exception as e:
         print(f"Error deleting custom data: {e}")
         return False
+
+def authenticate_user(email, password):
+    """Authenticate user by email and password"""
+    try:
+        conn = connect_to_database()
+        if not conn:
+            return None
+        
+        cursor = conn.cursor()
+        query = "SELECT id, email, first_name, last_name, regions FROM user_accounts WHERE email = %s AND password = %s"
+        cursor.execute(query, (email, password))
+        result = cursor.fetchone()
+        
+        cursor.close()
+        conn.close()
+        
+        if result:
+            return {
+                'id': result[0],
+                'email': result[1],
+                'first_name': result[2],
+                'last_name': result[3],
+                'regions': result[4] if result[4] else []
+            }
+        return None
+        
+    except Exception as e:
+        print(f"Error authenticating user: {e}")
+        return None
+
+def get_user_regions(user_id):
+    """Get regions for a specific user"""
+    try:
+        conn = connect_to_database()
+        if not conn:
+            return []
+        
+        cursor = conn.cursor()
+        query = "SELECT regions FROM user_accounts WHERE id = %s"
+        cursor.execute(query, (user_id,))
+        result = cursor.fetchone()
+        
+        cursor.close()
+        conn.close()
+        
+        if result and result[0]:
+            return list(result[0])
+        return []
+        
+    except Exception as e:
+        print(f"Error fetching user regions: {e}")
+        return []
