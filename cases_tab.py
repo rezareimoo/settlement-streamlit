@@ -2,17 +2,17 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-def render_cases_tab(df, jamati_member_df, data_source="CMS Data", fdp_df=None):
+def render_cases_tab(df, jamati_member_df, data_source="CMS Data", fdp_df=None, user_regions=None):
     """Render the Cases tab with regional summary, filtering, and visualizations"""
     
     if data_source != "Compare Both":
         # Single view mode
-        render_single_view(df, jamati_member_df, data_source)
+        render_single_view(df, jamati_member_df, data_source, user_regions=user_regions)
     else:
         # Comparison mode
-        render_comparison_view(df, jamati_member_df, fdp_df)
+        render_comparison_view(df, jamati_member_df, fdp_df, user_regions=user_regions)
 
-def render_single_view(df, jamati_member_df, data_source):
+def render_single_view(df, jamati_member_df, data_source, user_regions=None):
     """Render single data source view"""
     data_label = "CMS" if data_source == "CMS Data" else "FDP"
     
@@ -68,9 +68,21 @@ def render_single_view(df, jamati_member_df, data_source):
     else:
         date_range_text = "all available data"
     
-    # Region filter
+    # Region filter - only show user's allowed regions
     regions = df['region'].unique()
-    selected_region = st.selectbox("Select Region", options=["All"] + list(regions), key=f"region_filter_{data_source}")
+    if user_regions and len(user_regions) > 0:
+        # Filter to only show regions that user has access to
+        available_regions = [r for r in regions if r in user_regions]
+        if len(available_regions) == 1:
+            # If only one region, default to it (but still show selector)
+            default_region = available_regions[0]
+            region_options = [default_region]
+        else:
+            region_options = ["All"] + sorted(available_regions)
+    else:
+        region_options = ["All"] + sorted(list(regions))
+    
+    selected_region = st.selectbox("Select Region", options=region_options, key=f"region_filter_{data_source}")
     
     st.markdown("---")
     
@@ -297,7 +309,7 @@ def render_single_view(df, jamati_member_df, data_source):
         else:
             st.warning(f"No valid {data_label} data available for timeline visualization")
 
-def render_comparison_view(cms_df, jamati_member_df, fdp_df):
+def render_comparison_view(cms_df, jamati_member_df, fdp_df, user_regions=None):
     """Render comparison view between CMS and FDP data"""
     
     # Date Filter Section (integrated with data source selection)
@@ -374,7 +386,19 @@ def render_comparison_view(cms_df, jamati_member_df, fdp_df):
     fdp_regions = fdp_df['region'].unique() if fdp_df is not None else []
     all_regions = list(set(list(cms_regions) + list(fdp_regions)))
     
-    selected_region = st.selectbox("Select Region", options=["All"] + sorted(all_regions), key="region_filter_comparison")
+    # Filter to only show user's allowed regions
+    if user_regions and len(user_regions) > 0:
+        available_regions = [r for r in all_regions if r in user_regions]
+        if len(available_regions) == 1:
+            # If only one region, default to it (but still show selector)
+            default_region = available_regions[0]
+            region_options = [default_region]
+        else:
+            region_options = ["All"] + sorted(available_regions)
+    else:
+        region_options = ["All"] + sorted(all_regions)
+    
+    selected_region = st.selectbox("Select Region", options=region_options, key="region_filter_comparison")
     
     # Apply region filter to both dataframes
     if selected_region != "All":

@@ -145,3 +145,12 @@ CREATE TABLE PhysicalMentalHealth (
     HasStreeManagementStrategies BOOLEAN,
     StressManagementComments TEXT
 );
+
+CREATE TABLE user_accounts (
+    id SERIAL PRIMARY KEY,
+    email VARCHAR(255) NOT NULL,
+    first_name VARCHAR(100) NOT NULL,
+    last_name VARCHAR(100) NOT NULL,
+    regions TEXT[],
+    password VARCHAR(20) NOT NULL
+);
